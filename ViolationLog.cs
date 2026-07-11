@@ -17,7 +17,7 @@ public static class ViolationLog
                 Directory.CreateDirectory(AppConfig.Dir);
                 var line = JsonSerializer.Serialize(new
                 {
-                    ts_et = Schedule.NowEt().ToString("yyyy-MM-dd HH:mm:ss"),
+                    ts_local = Schedule.Now().ToString("yyyy-MM-dd HH:mm:ss"),
                     ts_utc = DateTime.UtcNow.ToString("o"),
                     type,
                     detail,

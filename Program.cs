@@ -14,8 +14,8 @@ public static class Program
     private static readonly List<OverlayWindow> _overlays = new();
     private static Application _app = null!;
     private static WinForms.NotifyIcon _tray = null!;
-    private static DateTime _overrideUntilEt = DateTime.MinValue;
-    private static DateTime _pauseUntilEt = DateTime.MinValue;
+    private static DateTime _overrideUntil = DateTime.MinValue;
+    private static DateTime _pauseUntil = DateTime.MinValue;
     private static bool _overlaysShown;
     private static bool _warnedNoRegions;
     private static bool _firstEval = true;
@@ -29,11 +29,13 @@ public static class Program
         if (!isNew) return;
 
         _cfg = AppConfig.Load();
+        Schedule.Initialize(_cfg);
         ViolationLog.Append("app_start", "TradeGlass started");
 
         _app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 
         SetupTray();
+        SurfaceStartupNotices();
         RebuildOverlays();
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -54,12 +56,59 @@ public static class Program
         };
 
         var menu = new WinForms.ContextMenuStrip();
+        menu.Items.Add("Settings", null, (_, _) => OpenSettings());
         menu.Items.Add("Configure regions", null, (_, _) => OpenRegionPicker());
         menu.Items.Add("View violation log", null, (_, _) => OpenLog());
         menu.Items.Add("Pause for 1 hour (logged)", null, (_, _) => Pause());
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("Exit (logged)", null, (_, _) => ExitApp());
         _tray.ContextMenuStrip = menu;
+    }
+
+    // Config recovery and timezone fallback messages, surfaced once at
+    // startup so problems are never silent.
+    private static void SurfaceStartupNotices()
+    {
+        var notices = new List<string>();
+        if (AppConfig.LoadNotice != null) notices.Add(AppConfig.LoadNotice);
+        if (Schedule.InitNotice != null) notices.Add(Schedule.InitNotice);
+        if (notices.Count == 0) return;
+        _tray.BalloonTipTitle = "TradeGlass notice";
+        _tray.BalloonTipText = string.Join(" ", notices);
+        _tray.ShowBalloonTip(10000);
+    }
+
+    private static SettingsWindow? _settings;
+
+    private static void OpenSettings()
+    {
+        if (_settings != null)
+        {
+            _settings.Activate();
+            return;
+        }
+        _settings = new SettingsWindow(_cfg, ApplySettings);
+        _settings.Closed += (_, _) => _settings = null;
+        _settings.Show();
+        _settings.Activate();
+    }
+
+    // Live apply: persist, re-derive schedule state, rebuild overlays with
+    // the new sentence and delay, reset notification dedupe. No restart.
+    private static void ApplySettings()
+    {
+        _cfg.Save();
+        Schedule.Initialize(_cfg);
+        RebuildOverlays();
+        _lastWarnedWindowEnd = DateTime.MinValue;
+        _warnedNoRegions = false;
+        ViolationLog.Append("settings_changed", "settings updated from settings window");
+        if (Schedule.InitNotice != null)
+        {
+            _tray.BalloonTipTitle = "TradeGlass notice";
+            _tray.BalloonTipText = Schedule.InitNotice;
+            _tray.ShowBalloonTip(10000);
+        }
     }
 
     private static void OpenRegionPicker()
@@ -89,7 +138,7 @@ public static class Program
 
     private static void Pause()
     {
-        _pauseUntilEt = Schedule.NowEt().AddHours(1);
+        _pauseUntil = Schedule.Now().AddHours(1);
         ViolationLog.Append("pause", "paused for 1 hour from tray");
         HideOverlays();
     }
@@ -114,7 +163,7 @@ public static class Program
 
     private static void OnOverrideConfirmed(string context)
     {
-        _overrideUntilEt = Schedule.NowEt().AddMinutes(_cfg.OverrideUnlockMinutes);
+        _overrideUntil = Schedule.Now().AddMinutes(_cfg.OverrideUnlockMinutes);
         ViolationLog.Append("override",
             $"typed override, unlocked {_cfg.OverrideUnlockMinutes} min, context: {context}");
         HideOverlays();
@@ -122,18 +171,18 @@ public static class Program
 
     private static void Evaluate()
     {
-        var et = Schedule.NowEt();
+        var now = Schedule.Now();
 
-        bool marketOpen = Schedule.IsMarketOpen(et);
-        bool inWindow = Schedule.InAllowedWindow(_cfg, et);
-        bool inGuard = Schedule.InGuardPeriod(_cfg, et);
-        bool overridden = et < _overrideUntilEt;
-        bool paused = et < _pauseUntilEt;
+        bool marketOpen = Schedule.IsMarketOpen();
+        bool inWindow = Schedule.InAllowedWindow(_cfg, now);
+        bool inGuard = Schedule.InGuardPeriod(_cfg, now);
+        bool overridden = now < _overrideUntil;
+        bool paused = now < _pauseUntil;
         bool platformUp = PlatformDetector.AnyPlatformVisible(_cfg.PlatformTitleKeywords);
 
         bool shouldGlass = marketOpen && inGuard && !inWindow && !overridden && !paused && platformUp;
 
-        NotifyOpenAndClose(et, inWindow, platformUp);
+        NotifyOpenAndClose(now, inWindow, platformUp);
 
         if (shouldGlass && _cfg.Regions.Count == 0)
         {
@@ -151,10 +200,10 @@ public static class Program
         if (shouldGlass)
         {
             string title = "Outside your trading window";
-            string msg = GlassMessage(et.TimeOfDay);
-            string status = Schedule.StatusLine(_cfg, et);
+            string msg = GlassMessage(now.TimeOfDay);
+            string status = Schedule.StatusLine(_cfg, now);
             string quote = _cfg.FooterQuotes.Count > 0
-                ? _cfg.FooterQuotes[et.DayOfYear % _cfg.FooterQuotes.Count]
+                ? _cfg.FooterQuotes[now.DayOfYear % _cfg.FooterQuotes.Count]
                 : "";
 
             foreach (var o in _overlays)
@@ -184,7 +233,7 @@ public static class Program
     // before it closes. Both only fire with a platform on screen, and the
     // first evaluation after launch never chimes (starting the app inside a
     // window is not the window opening).
-    private static void NotifyOpenAndClose(DateTime et, bool inWindow, bool platformUp)
+    private static void NotifyOpenAndClose(DateTime now, bool inWindow, bool platformUp)
     {
         if (_firstEval)
         {
@@ -204,10 +253,10 @@ public static class Program
 
         if (inWindow && platformUp && _cfg.CloseWarningMinutes > 0)
         {
-            var end = Schedule.CurrentWindowEnd(_cfg, et);
+            var end = Schedule.CurrentWindowEnd(_cfg, now);
             if (end != null)
             {
-                var remaining = end.Value - et;
+                var remaining = end.Value - now;
                 if (remaining.TotalMinutes <= _cfg.CloseWarningMinutes && end.Value != _lastWarnedWindowEnd)
                 {
                     _lastWarnedWindowEnd = end.Value;

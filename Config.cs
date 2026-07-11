@@ -13,12 +13,16 @@ public sealed class TradingWindow
     public string Start { get; set; } = "09:45";
     public string End { get; set; } = "11:35";
 
-    public bool Matches(DateTime et)
+    public bool Matches(DateTime local)
     {
-        var dayName = et.DayOfWeek.ToString().Substring(0, 3);
+        var dayName = local.DayOfWeek.ToString().Substring(0, 3);
         if (!Days.Contains(dayName)) return false;
-        var t = et.TimeOfDay;
-        return t >= TimeSpan.Parse(Start) && t < TimeSpan.Parse(End);
+        // TryParse, not Parse: a malformed hand-edited time must never
+        // crash the evaluate loop. A window that cannot be read never matches.
+        if (!TimeSpan.TryParse(Start, out var s)) return false;
+        if (!TimeSpan.TryParse(End, out var e)) return false;
+        var t = local.TimeOfDay;
+        return t >= s && t < e;
     }
 }
 
@@ -32,11 +36,39 @@ public sealed class RegionRect
 
 public sealed class AppConfig
 {
+    // Bump when the config shape changes and add a migration branch in Load().
+    public const int CurrentSchemaVersion = 2;
+
+    // 0 means the file predates versioning (v1). Migration fills the gaps.
+    public int SchemaVersion { get; set; }
+
+    // Windows timezone id, e.g. "Eastern Standard Time", "Central Standard
+    // Time", "GMT Standard Time", "AUS Eastern Standard Time". All windows
+    // and guards are interpreted in this zone. DST handled automatically.
+    public string TimeZoneId { get; set; } = "Eastern Standard Time";
+
+    // Which market calendar suppresses the glass when there is nothing to
+    // guard. One of: futures | us_equities | always_open.
+    // Exchange hours are evaluated on the exchange's own clock (ET),
+    // independent of TimeZoneId.
+    public string MarketHoursProfile { get; set; } = "futures";
+
+    // When true, guard periods are derived from Windows automatically:
+    // the glass arms ArmMinutesBefore each window opens, and stays on duty
+    // after each close until the day session winds down. When false, the
+    // explicit GuardWindows list below is used verbatim (advanced).
+    public bool AutoDeriveGuards { get; set; } = true;
+
+    public int ArmMinutesBefore { get; set; } = 15;
+
     public List<TradingWindow> Windows { get; set; } = new()
     {
         new TradingWindow { Days = new() { "Mon", "Tue", "Wed", "Thu", "Fri" }, Start = "09:45", End = "11:35" },
         new TradingWindow { Days = new() { "Sun", "Mon", "Tue", "Wed", "Thu" }, Start = "19:45", End = "21:15" },
     };
+
+    // Only consulted when AutoDeriveGuards is false.
+    public List<TradingWindow> GuardWindows { get; set; } = new();
 
     public List<RegionRect> Regions { get; set; } = new();
 
@@ -57,21 +89,9 @@ public sealed class AppConfig
     public bool ChimeOnOpen { get; set; } = true;
     public int CloseWarningMinutes { get; set; } = 5;
 
-    // When the glass is allowed to patrol at all. Outside these periods it
-    // never shows, so pre-market logins (before 9:30 AM, before 7:30 PM)
-    // stay friction free. The kill zones are the minutes right before each
-    // window opens and everything after each window closes.
-    public List<TradingWindow> GuardWindows { get; set; } = new()
-    {
-        new TradingWindow { Days = new() { "Mon", "Tue", "Wed", "Thu", "Fri" }, Start = "09:30", End = "09:45" },
-        new TradingWindow { Days = new() { "Mon", "Tue", "Wed", "Thu", "Fri" }, Start = "11:35", End = "16:45" },
-        new TradingWindow { Days = new() { "Sun", "Mon", "Tue", "Wed", "Thu" }, Start = "19:30", End = "19:45" },
-        new TradingWindow { Days = new() { "Sun", "Mon", "Tue", "Wed", "Thu" }, Start = "21:15", End = "23:59" },
-    };
-
-    // Shown at the bottom of the glass, rotating by day. Edit freely in
-    // config.json, no rebuild needed. Best material: your own words from
-    // disciplined days, aimed at yourself on undisciplined ones.
+    // Shown at the bottom of the glass, rotating by day. Edit freely, no
+    // rebuild needed. Best material: your own words from disciplined days,
+    // aimed at yourself on undisciplined ones.
     public List<string> FooterQuotes { get; set; } = new()
     {
         "A winning rule-break is more expensive training data than a losing one.",
@@ -91,6 +111,11 @@ public sealed class AppConfig
     [JsonIgnore]
     public static string LogPath => Path.Combine(Dir, "violations.jsonl");
 
+    // Set when Load() had to recover from a broken or migrated config, so the
+    // tray can tell the user instead of failing silently.
+    [JsonIgnore]
+    public static string? LoadNotice { get; private set; }
+
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         WriteIndented = true,
@@ -99,21 +124,75 @@ public sealed class AppConfig
 
     public static AppConfig Load()
     {
+        LoadNotice = null;
+
+        if (!File.Exists(ConfigPath))
+        {
+            var fresh = new AppConfig { SchemaVersion = CurrentSchemaVersion };
+            fresh.Save();
+            return fresh;
+        }
+
+        AppConfig? cfg = null;
         try
         {
-            if (File.Exists(ConfigPath))
-            {
-                var cfg = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath), JsonOpts);
-                if (cfg != null) return cfg;
-            }
+            cfg = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath), JsonOpts);
         }
         catch (Exception ex)
         {
-            ViolationLog.Append("config_load_error", ex.Message);
+            // Never silently destroy a hand-edited config. Back it up,
+            // report, and start from defaults.
+            var backup = ConfigPath + $".bad-{DateTime.Now:yyyyMMdd-HHmmss}";
+            try { File.Copy(ConfigPath, backup, overwrite: true); } catch { }
+            ViolationLog.Append("config_load_error", $"{ex.Message}; original backed up to {backup}");
+            LoadNotice = $"Config file could not be read and was reset to defaults. Your original was saved as {Path.GetFileName(backup)}.";
         }
-        var fresh = new AppConfig();
-        fresh.Save();
-        return fresh;
+
+        if (cfg == null)
+        {
+            var fresh = new AppConfig { SchemaVersion = CurrentSchemaVersion };
+            fresh.Save();
+            return fresh;
+        }
+
+        if (cfg.SchemaVersion < CurrentSchemaVersion)
+        {
+            Migrate(cfg);
+            cfg.Save();
+        }
+        else if (cfg.SchemaVersion > CurrentSchemaVersion)
+        {
+            ViolationLog.Append("config_newer_schema",
+                $"config schema {cfg.SchemaVersion} is newer than app schema {CurrentSchemaVersion}; proceeding best effort");
+        }
+
+        return cfg;
+    }
+
+    private static void Migrate(AppConfig cfg)
+    {
+        // v1 (SchemaVersion 0) to v2: timezone, market profile, and derived
+        // guards did not exist. Property initializers already supplied sane
+        // defaults for the new fields during deserialization. One behavioral
+        // decision: a v1 file carrying explicit GuardWindows keeps them
+        // verbatim, so migration never changes when the glass appears.
+        if (cfg.SchemaVersion < 2)
+        {
+            if (cfg.GuardWindows.Count > 0)
+            {
+                cfg.AutoDeriveGuards = false;
+                ViolationLog.Append("config_migrated",
+                    "v1 config migrated to v2; existing guard windows preserved verbatim (AutoDeriveGuards=false)");
+                LoadNotice = "Config upgraded to v2. Your existing guard windows were kept exactly as they were.";
+            }
+            else
+            {
+                cfg.AutoDeriveGuards = true;
+                ViolationLog.Append("config_migrated", "v1 config migrated to v2; guards now auto-derived");
+            }
+        }
+
+        cfg.SchemaVersion = CurrentSchemaVersion;
     }
 
     public void Save()
