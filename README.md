@@ -16,6 +16,20 @@ written to a local log with a timestamp. This is friction, not a cage. The
 bet is that impulses decay faster than a countdown, not that you are
 imprisoned.
 
+## What it looks like
+
+The glass over a trading platform, override in progress:
+
+![The glass blocking a platform outside the trading window](screenshots/glass.png)
+
+First launch:
+
+![First-run welcome](screenshots/welcome.png)
+
+Every knob, no JSON required:
+
+![Settings window](screenshots/settings.png)
+
 ## What it does
 
 - Enforces recurring trading windows you declare (e.g. 9:45 to 11:35 AM,
@@ -43,7 +57,21 @@ imprisoned.
 
 ## Install
 
-### Option A: build from source (currently the supported path)
+### Option A: prebuilt zip (recommended)
+
+1. Download the latest zip from this repo's Releases page, or use the one
+   that was sent to you directly.
+2. Install the .NET 8 Desktop Runtime if you do not have it:
+   https://dotnet.microsoft.com/download/dotnet/8.0 (the "Desktop Runtime"
+   installer, not the SDK). Without it the exe will not start.
+3. Unzip TradeGlass.exe anywhere permanent, e.g. `C:\Tools\TradeGlass\`.
+4. First launch of a downloaded exe: Windows SmartScreen may show
+   "Windows protected your PC". Click "More info", then "Run anyway".
+   This is the standard fate of unsigned software; see the antivirus
+   section below for why. If you would rather not take that on faith,
+   Option B exists precisely so you can read and build it yourself.
+
+### Option B: build from source
 
 1. Install the .NET 8 SDK: https://dotnet.microsoft.com/download/dotnet/8.0
 2. Clone or download this repo, then from the project folder:
