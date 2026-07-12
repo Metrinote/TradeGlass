@@ -43,6 +43,7 @@ public sealed class SettingsWindow : Window
     private readonly Dictionary<string, CheckBox> _platformChecks = new();
     private readonly TextBox _customPlatforms = new();
     private readonly TextBox _sentenceBox = new();
+    private readonly TextBox _customMessageBox = new();
     private readonly TextBox _delayBox = new();
     private readonly TextBox _unlockBox = new();
     private readonly CheckBox _chimeCheck = new();
@@ -157,6 +158,8 @@ public sealed class SettingsWindow : Window
             "What it costs to break your own rules. Every override is logged."));
         content.Children.Add(LabeledBox("Sentence that must be typed exactly:",
             _sentenceBox, _cfg.OverrideSentence, 420));
+        content.Children.Add(LabeledBox("Custom glass message (optional, replaces the default lock text; your own numbers hit hardest):",
+            _customMessageBox, _cfg.CustomGlassMessage, 420));
         content.Children.Add(LabeledBox("Impulse-check countdown before typing is allowed (seconds):",
             _delayBox, _cfg.OverrideDelaySeconds.ToString(), 60));
         content.Children.Add(LabeledBox("Unlock duration after a successful override (minutes):",
@@ -361,6 +364,7 @@ public sealed class SettingsWindow : Window
         _cfg.MarketHoursProfile = (_profileCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? _cfg.MarketHoursProfile;
         _cfg.PlatformTitleKeywords = platforms;
         _cfg.OverrideSentence = sentence;
+        _cfg.CustomGlassMessage = _customMessageBox.Text.Trim();
         _cfg.OverrideDelaySeconds = delay;
         _cfg.OverrideUnlockMinutes = unlock;
         _cfg.ChimeOnOpen = _chimeCheck.IsChecked == true;

@@ -89,6 +89,10 @@ public sealed class AppConfig
     public bool ChimeOnOpen { get; set; } = true;
     public int CloseWarningMinutes { get; set; } = 5;
 
+    // Optional. When set, replaces the default lock-screen message. Best
+    // material: your own numbers ("every pre-open entry this quarter lost").
+    public string CustomGlassMessage { get; set; } = "";
+
     // Shown at the bottom of the glass, rotating by day. Edit freely, no
     // rebuild needed. Best material: your own words from disciplined days,
     // aimed at yourself on undisciplined ones.
@@ -116,6 +120,10 @@ public sealed class AppConfig
     [JsonIgnore]
     public static string? LoadNotice { get; private set; }
 
+    // True when Load() created a brand new config, i.e. a first run.
+    [JsonIgnore]
+    public static bool CreatedFresh { get; private set; }
+
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         WriteIndented = true,
@@ -125,11 +133,13 @@ public sealed class AppConfig
     public static AppConfig Load()
     {
         LoadNotice = null;
+        CreatedFresh = false;
 
         if (!File.Exists(ConfigPath))
         {
             var fresh = new AppConfig { SchemaVersion = CurrentSchemaVersion };
             fresh.Save();
+            CreatedFresh = true;
             return fresh;
         }
 

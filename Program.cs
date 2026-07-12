@@ -38,6 +38,13 @@ public static class Program
         SurfaceStartupNotices();
         RebuildOverlays();
 
+        if (AppConfig.CreatedFresh)
+        {
+            var welcome = new WelcomeWindow(OpenSettings, OpenRegionPicker);
+            welcome.Show();
+            welcome.Activate();
+        }
+
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         timer.Tick += (_, _) => Evaluate();
         timer.Start();
@@ -200,7 +207,7 @@ public static class Program
         if (shouldGlass)
         {
             string title = "Outside your trading window";
-            string msg = GlassMessage(now.TimeOfDay);
+            string msg = GlassMessage();
             string status = Schedule.StatusLine(_cfg, now);
             string quote = _cfg.FooterQuotes.Count > 0
                 ? _cfg.FooterQuotes[now.DayOfYear % _cfg.FooterQuotes.Count]
@@ -269,17 +276,15 @@ public static class Program
         }
     }
 
-    // Times referenced in these strings should be kept in sync with the
-    // config windows if those ever change. Rewrite the wording over time:
-    // the glass works best when it quotes your own violation history.
-    private static string GlassMessage(TimeSpan t)
+    // Generic by design: works for any user's schedule. The status line
+    // below it already says when the next window opens. Personal flavor
+    // belongs in CustomGlassMessage and FooterQuotes in config, both
+    // editable in Settings without a rebuild.
+    private static string GlassMessage()
     {
-        if (t < new TimeSpan(9, 45, 0))
-            return "Four months of Lucid data: every entry before 9:45 AM an expense. Zero for three, about $230 donated. Follow your rules!";
-        if (t < new TimeSpan(17, 0, 0))
-            return "Morning window closed at 11:35 AM ET. Whatever the chart is doing now, tomorrow has setups too. Positions already open are yours to manage.";
-        if (t < new TimeSpan(19, 45, 0))
-            return "Evening window opens 7:45 PM ET. The first 15 minutes of the session are for watching, not entering.";
-        return "Evening window closed at 9:15 PM ET. If no confirmation came by 9, the session is probably a dud anyway. Positions already open are yours to manage.";
+        if (!string.IsNullOrWhiteSpace(_cfg.CustomGlassMessage))
+            return _cfg.CustomGlassMessage;
+        return "This is outside the trading window you declared for yourself. "
+             + "New entries wait. Positions already open are yours to manage.";
     }
 }

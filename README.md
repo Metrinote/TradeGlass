@@ -1,79 +1,132 @@
 # TradeGlass
 
-A discipline overlay for futures trading. Outside your allowed entry windows,
-while the market is open and a trading platform is on screen, semi-transparent
-click-blocking glass covers your configured DOM regions. Existing positions
-are never touched because the glass only stands between you and new clicks.
-Overriding requires typing a full sentence and every override is logged.
+A discipline overlay for traders. You declare the time windows in which you
+allow yourself to enter trades. Outside those windows, while your market is
+open and your trading platform is on screen, a semi-transparent
+click-blocking glass covers your order-entry areas. You can still see
+prices. You cannot click through.
 
-Windows agreed as of July 2026:
-- 9:45 to 11:35 AM ET, Monday through Friday
-- 7:45 to 9:15 PM ET, Sunday through Thursday
-Glass only appears during GUARD periods (config-editable): weekdays 9:30 to
-9:45 AM and 11:35 AM to 4:45 PM, Sun through Thu 7:30 to 7:45 PM and 9:15 PM
-to midnight. Outside guard periods, including pre-market logins before 9:30,
-the glass never shows. Within a guard period it still requires: market open,
-platform window (Tradovate / SuperDOM) visible, not overridden, not paused.
-The override runs a 30 second impulse-check countdown before the typed
-sentence is even accepted (OverrideDelaySeconds in config).
-A soft chime plus toast fires when a window opens, and a warning toast fires
-5 minutes before it closes (ChimeOnOpen / CloseWarningMinutes in config).
-Weekends and platform-closed time: invisible, zero footprint.
+TradeGlass never touches your positions, orders, or broker account. It is
+not connected to anything. It blocks pixels, which is exactly why it works
+on platforms and prop accounts where automation and API access are banned.
 
-## Build (one time)
+Overriding the glass is possible, on purpose: it costs a 30 second
+impulse-check countdown plus typing a full sentence, and every override is
+written to a local log with a timestamp. This is friction, not a cage. The
+bet is that impulses decay faster than a countdown, not that you are
+imprisoned.
+
+## What it does
+
+- Enforces recurring trading windows you declare (e.g. 9:45 to 11:35 AM,
+  weekdays), in your own timezone
+- Arms shortly before each window opens, covering the pre-open rush zone,
+  and stays on duty after each close
+- Detects trading platforms by window title (Tradovate, NinjaTrader,
+  TopstepX, and others, fully configurable), desktop apps and browser tabs
+  alike
+- Disappears completely when your platform is closed or your market is shut.
+  Weekends: invisible, zero footprint
+- Chimes when your window opens, warns you minutes before it closes
+- Logs every override, pause, and settings change to a local JSONL file
+
+## What it deliberately does not do
+
+- Touch positions or working orders. A trade opened inside your window is
+  yours to manage after the window closes; the glass only blocks NEW entries
+- Connect to your broker, send data anywhere, or require an account.
+  Everything is local
+- Enforce P&L rules. Loss limits are your broker's job and most platforms
+  offer them natively. TradeGlass does time, and only time
+- Physically prevent a determined you. Task Manager kills it in seconds.
+  Every escape leaves a gap in the log, and the log does not lie
+
+## Install
+
+### Option A: build from source (currently the supported path)
 
 1. Install the .NET 8 SDK: https://dotnet.microsoft.com/download/dotnet/8.0
-2. In PowerShell, from this folder:
+2. Clone or download this repo, then from the project folder:
 
 ```powershell
 dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true
 ```
 
 3. The exe lands in `bin\Release\net8.0-windows\win-x64\publish\TradeGlass.exe`.
-   Move it anywhere permanent, e.g. `C:\Tools\TradeGlass\`.
 
-## Run at startup (the whole point)
+### Antivirus honesty
 
-Press Win+R, type `shell:startup`, Enter. Put a shortcut to TradeGlass.exe in
-that folder. It now launches on every boot and lives in the system tray.
+Your antivirus will probably flag the exe. This is the standard fate of any
+freshly compiled, unsigned executable that draws always-on-top windows: the
+behavior pattern-matches screen-hijacking malware, and heuristics cannot
+tell a discipline tool from a threat. You have the full source in front of
+you and compiled it yourself, which is the strongest trust position software
+can offer. Add a folder exception for the project directory in your
+antivirus and move on. If that sentence makes you uncomfortable, read the
+source first. It is small on purpose.
+
+### Run at startup (recommended)
+
+A discipline tool you must remember to launch is broken by design. Press
+Win+R, type `shell:startup`, Enter, and put a shortcut to the published exe
+in that folder. It now starts with Windows, lives in the system tray, and
+decides on its own when the glass is needed.
 
 ## First run
 
-1. Right click the tray shield icon, then Configure regions.
-2. The screen dims. Drag one rectangle over each DOM (or one wide rectangle
-   over all three). Backspace removes the last rectangle. Enter saves.
-   The footprint chart area stays uncovered, so it stays clickable.
-3. Done. The app decides everything else on its own from here.
+On first launch a welcome window walks you through the two setup steps:
 
-## Config
+1. **Settings** (tray icon, right click): declare your trading windows,
+   timezone, market calendar, and platform keywords
+2. **Draw regions**: the screen dims; drag a rectangle over each order-entry
+   area (your DOMs). Charts and everything else stay uncovered and clickable.
+   Backspace removes the last rectangle, Enter saves
 
-`%APPDATA%\TradeGlass\config.json`. Windows, regions, platform title keywords,
-override sentence, and unlock minutes all live there. Edit and restart the
-app to apply. Adding or retiring a session (e.g. dropping the Asian window)
-is editing one JSON entry, not rebuilding.
+That is the whole setup. From then on it runs itself.
 
-Violation log: `%APPDATA%\TradeGlass\violations.jsonl`, one JSON object per
-line. Overrides, pauses, exits, and config changes all leave a row. This is
-the file a future MetriNote sync reads from.
+## Configuration
+
+Everything lives in the Settings window. For the curious or the advanced,
+the same values live in `%APPDATA%\TradeGlass\config.json`:
+
+- Trading windows, days plus start and end times, in your timezone
+- Guard behavior: auto-derived by default (arms N minutes before each open);
+  set `AutoDeriveGuards` false to hand-author `GuardWindows` in JSON
+- Market calendar: `futures` (CME Globex), `us_equities` (9:30 to 4 ET), or
+  `always_open` (crypto). Exchange hours run on the exchange's clock,
+  your windows run on yours
+- Override sentence, impulse-check seconds, unlock minutes
+- `CustomGlassMessage`: replace the default lock text with your own words.
+  Your own numbers hit hardest
+- `FooterQuotes`: one line shown on the glass, rotating daily
+
+If the config file is ever corrupted, it is backed up (not overwritten) and
+the app tells you.
+
+The violation log is `%APPDATA%\TradeGlass\violations.jsonl`, one JSON
+object per line: overrides, pauses, exits, settings changes. Review it
+honestly. It is the whole point.
 
 ## Honest limitations
 
-- The overlay windows may appear in Alt+Tab. Cosmetic only, and fixable
-  later with a tool-window style flag if it bothers you.
-- Friction, not force. Task Manager kills it. The bet is that impulse loses
-  to a typed sentence, not that you are imprisoned.
-- If you rearrange the DOM windows on the monitor, re-drag the regions
-  (30 seconds via the tray menu). Static regions do not follow moved windows.
-- Mixed-DPI multi-monitor setups: saved region pixels are captured from the
-  raw cursor and are correct, but the preview rectangles during dragging may
-  render slightly offset. Trust the save, not the preview.
-- Mouse only. You confirmed you do not use order hotkeys; if that ever
-  changes, tell me and we add focus handling, because keystrokes can pass
-  to a focused platform window behind the glass.
-- The market-hours logic covers CME equity index and energy hours including
-  the daily 5 to 6 PM ET break. Exchange holidays are NOT modeled; on a
-  holiday-shortened session the glass may show while the market is shut,
-  which is harmless.
-- UNTESTED as delivered: written without a Windows machine or compiler
-  available. Expect possibly one or two compile errors on first build.
-  Paste any error output back and fixes will be immediate.
+- Friction, not force. Killing the process defeats it. The log remembers
+- Mouse clicks only. If you enter orders via keyboard hotkeys, keystrokes
+  can reach a focused platform window behind the glass
+- Regions are static rectangles. If you rearrange your platform windows,
+  re-drag the regions (30 seconds via the tray menu)
+- Window-title detection cannot tell your platform from a browser tab with
+  a similar title; tune the keywords in Settings if false positives annoy you
+- Exchange holidays are not modeled; on a holiday the glass may patrol a
+  shut market, which is harmless
+- Mixed-DPI multi-monitor: saved region pixels are correct, but preview
+  rectangles while dragging may render slightly offset. Trust the save
+- Windows only
+
+## Privacy
+
+No network calls. No telemetry. No account. Your config and your violation
+log are files on your machine, and they never leave it.
+
+## License
+
+See LICENSE.
