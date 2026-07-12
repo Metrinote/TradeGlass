@@ -34,8 +34,8 @@ Customizable settings:
 
 - Enforces recurring trading windows you set (like 9:45 to 11:35 AM on
   weekdays), in your own timezone
-- Arms shortly before each window opens to cover the pre-open rush, and
-  stays up after each close
+- Turns on a few minutes before each window opens (the classic rush-in-early
+  danger zone) and stays active after each close
 - Detects trading platforms by window title (Tradovate, NinjaTrader,
   TopstepX, and more, fully configurable), desktop apps and browser tabs
   alike
@@ -52,8 +52,8 @@ Customizable settings:
   Everything is local
 - Enforce P&L rules. Loss limits are your broker's job and most platforms
   already offer them. TradeGlass only handles time
-- Stop you if you're truly determined. Task Manager kills it in seconds,
-  but the gap still shows up in the log
+- Stop you if you're truly determined. Task Manager kills it in seconds.
+  It's a speed bump, not a wall
 
 ## Install
 
@@ -111,6 +111,11 @@ On first launch a welcome window walks you through the two setup steps:
 
 That's the whole setup. From there it runs itself.
 
+Everything is reachable later from the system tray: right click the
+TradeGlass shield icon (bottom right of your taskbar, it may be tucked
+behind the little arrow) for Settings, region setup, the violation log, a
+one hour pause, and exit.
+
 ## Configuration
 
 Everything lives in the Settings window. If you prefer editing by hand, the
@@ -137,8 +142,8 @@ reviewing every so often, since that log is the whole point of the tool.
 
 ## Honest limitations
 
-- It's friction, not force. Killing the process defeats it, but it leaves a
-  gap in the log
+- It's friction, not force. If you really want around it, Task Manager
+  kills it in seconds
 - Mouse clicks only. If you enter orders with keyboard hotkeys, keystrokes
   can still reach a focused platform window behind the glass
 - Regions are static rectangles. If you rearrange your platform windows,
