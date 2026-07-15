@@ -24,14 +24,18 @@ public sealed class OverlayWindow : Window
 
     private readonly RegionRect _rect;
     private readonly Action<string> _onOverrideConfirmed;
+    private readonly Action? _onManageRequested;
     private readonly string _sentence;
     private readonly int _delaySeconds;
+    private readonly bool _manageEnabled;
 
     private readonly TextBlock _title = new();
     private readonly TextBlock _message = new();
     private readonly TextBlock _status = new();
     private readonly TextBlock _quote = new();
     private readonly Button _overrideBtn = new();
+    private readonly Button _manageBtn = new();
+    private readonly StackPanel _buttonRow = new();
     private readonly TextBlock _countdown = new();
     private readonly StackPanel _typePanel = new();
     private readonly TextBox _typeBox = new();
@@ -39,12 +43,15 @@ public sealed class OverlayWindow : Window
     private readonly System.Windows.Threading.DispatcherTimer _delayTimer = new();
     private int _remaining;
 
-    public OverlayWindow(RegionRect rect, string sentence, int delaySeconds, Action<string> onOverrideConfirmed)
+    public OverlayWindow(RegionRect rect, string sentence, int delaySeconds,
+        bool manageEnabled, Action<string> onOverrideConfirmed, Action? onManageRequested)
     {
         _rect = rect;
         _sentence = sentence;
         _delaySeconds = Math.Max(0, delaySeconds);
+        _manageEnabled = manageEnabled;
         _onOverrideConfirmed = onOverrideConfirmed;
+        _onManageRequested = onManageRequested;
 
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -89,8 +96,19 @@ public sealed class OverlayWindow : Window
 
         _overrideBtn.Content = "Override anyway";
         _overrideBtn.Padding = new Thickness(18, 8, 18, 8);
-        _overrideBtn.HorizontalAlignment = HorizontalAlignment.Center;
+        _overrideBtn.Foreground = new SolidColorBrush(Color.FromRgb(224, 96, 96));
         _overrideBtn.Click += (_, _) => StartDelay();
+
+        _manageBtn.Content = "Manage open position";
+        _manageBtn.Padding = new Thickness(18, 8, 18, 8);
+        _manageBtn.Margin = new Thickness(0, 0, 10, 0);
+        _manageBtn.Click += (_, _) => _onManageRequested?.Invoke();
+        _manageBtn.Visibility = _manageEnabled ? Visibility.Visible : Visibility.Collapsed;
+
+        _buttonRow.Orientation = Orientation.Horizontal;
+        _buttonRow.HorizontalAlignment = HorizontalAlignment.Center;
+        _buttonRow.Children.Add(_manageBtn);
+        _buttonRow.Children.Add(_overrideBtn);
 
         _countdown.FontSize = 13;
         _countdown.Foreground = new SolidColorBrush(Color.FromRgb(224, 178, 96));
@@ -163,7 +181,7 @@ public sealed class OverlayWindow : Window
         stack.Children.Add(_title);
         stack.Children.Add(_message);
         stack.Children.Add(_status);
-        stack.Children.Add(_overrideBtn);
+        stack.Children.Add(_buttonRow);
         stack.Children.Add(_countdown);
         stack.Children.Add(_typePanel);
 
@@ -195,7 +213,7 @@ public sealed class OverlayWindow : Window
 
     private void StartDelay()
     {
-        _overrideBtn.Visibility = Visibility.Collapsed;
+        _buttonRow.Visibility = Visibility.Collapsed;
         if (_delaySeconds == 0)
         {
             OpenTypePanel();
@@ -232,7 +250,7 @@ public sealed class OverlayWindow : Window
         _delayTimer.Stop();
         _countdown.Visibility = Visibility.Collapsed;
         _typePanel.Visibility = Visibility.Collapsed;
-        _overrideBtn.Visibility = Visibility.Visible;
+        _buttonRow.Visibility = Visibility.Visible;
         _typeBox.Clear();
         _typeError.Visibility = Visibility.Collapsed;
     }
@@ -258,5 +276,11 @@ public sealed class OverlayWindow : Window
         _message.Text = message;
         _status.Text = status;
         _quote.Text = quote;
+    }
+
+    // Briefly flash a cap-reached notice in place of the status line.
+    public void ShowManageDenied(int cap, int resetMin)
+    {
+        _status.Text = $"Manage cap reached ({cap}). Wait {resetMin} min, or use Override.";
     }
 }

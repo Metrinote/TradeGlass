@@ -46,6 +46,9 @@ public sealed class SettingsWindow : Window
     private readonly TextBox _customMessageBox = new();
     private readonly TextBox _delayBox = new();
     private readonly TextBox _unlockBox = new();
+    private readonly CheckBox _manageCheck = new();
+    private readonly TextBox _manageDurBox = new();
+    private readonly TextBox _manageCapBox = new();
     private readonly CheckBox _chimeCheck = new();
     private readonly TextBox _warnBox = new();
     private readonly TextBox _quotesBox = new();
@@ -164,6 +167,17 @@ public sealed class SettingsWindow : Window
             _delayBox, _cfg.OverrideDelaySeconds.ToString(), 60));
         content.Children.Add(LabeledBox("Unlock duration after a successful override (minutes):",
             _unlockBox, _cfg.OverrideUnlockMinutes.ToString(), 60));
+
+        content.Children.Add(Section("Manage open position",
+            "Lets you briefly lift the glass to adjust stops or cancel orders on a trade you already have open. No countdown, no typed sentence, always logged."));
+        _manageCheck.Content = "Show the \"Manage open position\" button on the glass";
+        _manageCheck.Foreground = Fg;
+        _manageCheck.IsChecked = _cfg.AllowManageBypass;
+        content.Children.Add(_manageCheck);
+        content.Children.Add(LabeledBox("Seconds the glass lifts per manage click:",
+            _manageDurBox, _cfg.ManageDurationSeconds.ToString(), 60));
+        content.Children.Add(LabeledBox("Max consecutive manage clicks (0 = unlimited, resets after a few minutes locked):",
+            _manageCapBox, _cfg.ManageMaxConsecutive.ToString(), 60));
 
         content.Children.Add(Section("Notifications", ""));
         _chimeCheck.Content = "Chime and toast when a trading window opens";
@@ -331,6 +345,10 @@ public sealed class SettingsWindow : Window
             problems.Add("Impulse-check seconds must be a number between 0 and 600.");
         if (!int.TryParse(_unlockBox.Text.Trim(), out var unlock) || unlock < 1 || unlock > 120)
             problems.Add("Unlock minutes must be a number between 1 and 120.");
+        if (!int.TryParse(_manageDurBox.Text.Trim(), out var manageDur) || manageDur < 5 || manageDur > 600)
+            problems.Add("Manage seconds must be a number between 5 and 600.");
+        if (!int.TryParse(_manageCapBox.Text.Trim(), out var manageCap) || manageCap < 0 || manageCap > 50)
+            problems.Add("Manage cap must be a number between 0 and 50 (0 = unlimited).");
         if (!int.TryParse(_warnBox.Text.Trim(), out var warn) || warn < 0 || warn > 60)
             problems.Add("Close warning minutes must be a number between 0 and 60.");
 
@@ -367,6 +385,9 @@ public sealed class SettingsWindow : Window
         _cfg.CustomGlassMessage = _customMessageBox.Text.Trim();
         _cfg.OverrideDelaySeconds = delay;
         _cfg.OverrideUnlockMinutes = unlock;
+        _cfg.AllowManageBypass = _manageCheck.IsChecked == true;
+        _cfg.ManageDurationSeconds = manageDur;
+        _cfg.ManageMaxConsecutive = manageCap;
         _cfg.ChimeOnOpen = _chimeCheck.IsChecked == true;
         _cfg.CloseWarningMinutes = warn;
         _cfg.FooterQuotes = _quotesBox.Text

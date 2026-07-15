@@ -82,6 +82,21 @@ public sealed class AppConfig
     // even appears. Impulses decay on a timescale of seconds; make them wait.
     public int OverrideDelaySeconds { get; set; } = 30;
 
+    // Manage-open-position bypass. Lets a trader who is already in a position
+    // lift the glass briefly to adjust stops or cancel working orders, without
+    // the override friction, because managing an existing trade is not the
+    // rule-break the glass targets. Logged as its own event type.
+    public bool AllowManageBypass { get; set; } = true;
+
+    // How long the glass lifts per manage click, in seconds.
+    public int ManageDurationSeconds { get; set; } = 60;
+
+    // 0 means unlimited re-clicks (free management, logged). Above 0 caps
+    // consecutive manage clicks; the counter resets after the glass has been
+    // continuously locked for ManageResetMinutes, proving you stepped away.
+    public int ManageMaxConsecutive { get; set; } = 0;
+    public int ManageResetMinutes { get; set; } = 3;
+
     // Quality of life: a soft chime plus toast when a trading window opens
     // (only if a platform window is on screen), and a warning toast this many
     // minutes before the window closes. ChimeOnOpen false or

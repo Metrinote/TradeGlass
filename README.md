@@ -37,12 +37,16 @@ Customizable settings:
 - Turns on a few minutes before each window opens (the classic rush-in-early
   danger zone) and stays active after each close
 - Detects trading platforms by window title (Tradovate, NinjaTrader,
-  TopstepX, and more, fully configurable), desktop apps and browser tabs
-  alike
+  TopstepX, TradingView, and more, or add your own), desktop apps and
+  browser tabs alike. Works with any platform whose window you can name,
+  which is set in the keywords list in Settings
+- Lets you briefly lift the glass to manage a position you already have
+  open (adjust stops, cancel orders) without the override friction, on a
+  short timer, always logged
 - Disappears completely when your platform is closed or your market is
   shut. Weekends: invisible
 - Chimes when your window opens, warns you a few minutes before it closes
-- Logs every override, pause, and settings change to a local file
+- Logs every override, manage, pause, and settings change to a local file
 
 ## What it doesn't do
 
@@ -115,6 +119,36 @@ Everything is reachable later from the system tray: right click the
 TradeGlass shield icon (bottom right of your taskbar, it may be tucked
 behind the little arrow) for Settings, region setup, the violation log, a
 one hour pause, and exit.
+
+### Does it work with my platform?
+
+Probably. TradeGlass doesn't hook into any specific broker or platform, it
+just covers screen regions and detects platforms by window title. So it
+works with Tradovate, NinjaTrader, TopstepX, TradingView, MetaTrader, and
+anything else, as long as you add a word from that platform's window title
+to the keywords list in Settings (some are preset, and there's a custom
+field for the rest). Rule of thumb: guard where you actually place orders,
+not where you only look at charts. If you execute in one app and chart in
+another, only add the one you execute in.
+
+### Managing an open trade after your window closes
+
+If you're already in a position when your window ends, you still need to
+manage it: adjust a stop after a partial fill, or cancel leftover working
+orders before you're done for the day. The glass covers your DOM, so it
+would normally block that too.
+
+That's what the **Manage open position** button on the glass is for. Click
+it and the glass lifts for a short time (60 seconds by default) so you can
+manage your trade, then it comes back on its own. No countdown, no typed
+sentence, because managing a trade you already have open isn't the thing
+the glass is trying to stop. It's still logged, so you can see later how
+often you used it.
+
+In Settings you can turn this button off entirely, change how long the
+glass lifts per click (say 30 seconds instead of 60), and optionally cap
+how many times in a row you can use it. By default it's on, 60 seconds, and
+uncapped.
 
 ## Configuration
 

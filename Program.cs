@@ -16,6 +16,9 @@ public static class Program
     private static WinForms.NotifyIcon _tray = null!;
     private static DateTime _overrideUntil = DateTime.MinValue;
     private static DateTime _pauseUntil = DateTime.MinValue;
+    private static DateTime _manageUntil = DateTime.MinValue;
+    private static int _manageConsecutive;
+    private static DateTime _lastManageEnd = DateTime.MinValue;
     private static bool _overlaysShown;
     private static bool _warnedNoRegions;
     private static bool _firstEval = true;
@@ -163,7 +166,8 @@ public static class Program
         _overlays.Clear();
         foreach (var r in _cfg.Regions)
         {
-            _overlays.Add(new OverlayWindow(r, _cfg.OverrideSentence, _cfg.OverrideDelaySeconds, OnOverrideConfirmed));
+            _overlays.Add(new OverlayWindow(r, _cfg.OverrideSentence, _cfg.OverrideDelaySeconds,
+                _cfg.AllowManageBypass, OnOverrideConfirmed, OnManageRequested));
         }
         _overlaysShown = false;
     }
@@ -176,6 +180,38 @@ public static class Program
         HideOverlays();
     }
 
+    private static void OnManageRequested()
+    {
+        var now = Schedule.Now();
+
+        // Reset the consecutive counter if the glass has been continuously
+        // locked (no active manage window) for the reset interval, which
+        // proves the trader actually stepped away rather than clicking through.
+        if (_lastManageEnd != DateTime.MinValue
+            && now - _lastManageEnd >= TimeSpan.FromMinutes(Math.Max(0, _cfg.ManageResetMinutes)))
+        {
+            _manageConsecutive = 0;
+        }
+
+        // 0 means unlimited. Above 0 enforces a consecutive cap.
+        if (_cfg.ManageMaxConsecutive > 0 && _manageConsecutive >= _cfg.ManageMaxConsecutive)
+        {
+            ViolationLog.Append("manage_bypass_denied",
+                $"manage cap of {_cfg.ManageMaxConsecutive} reached; wait {_cfg.ManageResetMinutes} min to reset");
+            foreach (var o in _overlays)
+                o.ShowManageDenied(_cfg.ManageMaxConsecutive, _cfg.ManageResetMinutes);
+            return;
+        }
+
+        _manageConsecutive++;
+        var dur = Math.Max(5, _cfg.ManageDurationSeconds);
+        _manageUntil = now.AddSeconds(dur);
+        _lastManageEnd = _manageUntil;
+        ViolationLog.Append("manage_bypass",
+            $"manage open position, glass lifted {dur}s, consecutive #{_manageConsecutive}");
+        HideOverlays();
+    }
+
     private static void Evaluate()
     {
         var now = Schedule.Now();
@@ -185,9 +221,10 @@ public static class Program
         bool inGuard = Schedule.InGuardPeriod(_cfg, now);
         bool overridden = now < _overrideUntil;
         bool paused = now < _pauseUntil;
+        bool managing = now < _manageUntil;
         bool platformUp = PlatformDetector.AnyPlatformVisible(_cfg.PlatformTitleKeywords);
 
-        bool shouldGlass = marketOpen && inGuard && !inWindow && !overridden && !paused && platformUp;
+        bool shouldGlass = marketOpen && inGuard && !inWindow && !overridden && !paused && !managing && platformUp;
 
         NotifyOpenAndClose(now, inWindow, platformUp);
 
