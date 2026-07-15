@@ -103,6 +103,19 @@ Win+R, type `shell:startup`, Enter, and drop a shortcut to the exe in that
 folder. It'll start with Windows, sit in the system tray, and decide on its
 own when the glass is needed.
 
+### Updating to a new version
+
+Your settings are safe: everything you configure lives in
+`%APPDATA%\TradeGlass\`, separate from the app itself, so updating never
+touches your windows, regions, or preferences.
+
+To update: exit TradeGlass (right click the tray icon, Exit), download the
+new zip from Releases, and replace the old `TradeGlass.exe` with the new
+one in the same folder you already keep it. That last part matters, if you
+run it from a fixed folder or a startup shortcut, swap the file in that
+exact spot so the shortcut still points at it. Then launch it again. Your
+config carries over automatically.
+
 ## First run
 
 On first launch a welcome window walks you through the two setup steps:
